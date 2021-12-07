@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+ticket/target
+ticket/res
+ticket/neardev
+ticket-factory/target
+ticket-factory/res
+ticket-factory/neardev
