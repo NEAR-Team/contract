@@ -1,7 +1,7 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::UnorderedMap;
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{env, ext_contract, near_bindgen, AccountId, Balance, Gas, PanicOnDefault, Promise};
+use near_sdk::{env, ext_contract, near_bindgen, AccountId, Balance, Gas, PanicOnDefault, Promise, log};
 
 near_sdk::setup_alloc!();
 const CODE: &[u8] = include_bytes!("../../ticket/res/contract.wasm");
@@ -31,6 +31,7 @@ impl Contract {
             "Not enough Near to create contract"
         );
         let subaccount_id = format!("{}.{}", prefix, env::current_account_id());
+        log!("{}", format!("Create new ticket contract at account {}", subaccount_id));
         let mut ticket_contracts = self.ticket_contracts_by_owner.get(&env::predecessor_account_id()).unwrap_or_else(|| Vec::new());
         ticket_contracts.push(subaccount_id.clone());
         self.ticket_contracts_by_owner.insert(&env::predecessor_account_id(), &ticket_contracts);

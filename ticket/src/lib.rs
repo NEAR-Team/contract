@@ -23,9 +23,10 @@ use near_sdk::collections::{LazyOption, UnorderedMap};
 use near_sdk::json_types::ValidAccountId;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
-    env, ext_contract, near_bindgen, AccountId, Balance, BorshStorageKey, Gas, PanicOnDefault,
-    Promise, PromiseOrValue, Timestamp,
+    env, ext_contract, log, near_bindgen, AccountId, Balance, BorshStorageKey, Gas, PanicOnDefault,
+    Promise, PromiseOrValue, Timestamp, assert_one_yocto
 };
+
 const MINT_FEE: Balance = 1_000_000_000_000_000_000_000_0;
 const PREPARE_GAS: Gas = 1_500_000_000_000_0;
 near_sdk::setup_alloc!();
@@ -54,7 +55,7 @@ enum StorageKey {
 #[near_bindgen]
 impl Contract {
     #[init]
-    pub fn new(owner_id: AccountId,metadata: TicketContractMetadata) -> Self {
+    pub fn new(owner_id: AccountId, metadata: TicketContractMetadata) -> Self {
         assert!(!env::state_exists(), "Already initialized");
         Self {
             owner_id,
@@ -141,7 +142,8 @@ impl Contract {
             "All tickets are sold out"
         );
         assert!(
-            env::attached_deposit() == *show.ticket_price_by_type.get(&ticket_type).unwrap(),
+            env::attached_deposit()
+                == *show.ticket_price_by_type.get(&ticket_type).unwrap() + MINT_FEE,
             "Please deposit exactly price of ticket"
         );
         let ticket_id = format!(
@@ -150,6 +152,13 @@ impl Contract {
             ticket_type,
             show.ticket_sold_by_type.get(&ticket_type).unwrap()
         );
+        log!("{}",format!(
+            "Buy new ticket: show id: {}, ticket type: {}, ticket id: {}, price: {} YoctoNear",
+            show_id,
+            ticket_type,
+            ticket_id,
+            show.ticket_price_by_type.get(&ticket_type).unwrap()
+        ));
         ex_self::nft_private_mint(
             ticket_id,
             ValidAccountId::try_from(env::predecessor_account_id()).unwrap(),
@@ -157,6 +166,15 @@ impl Contract {
             MINT_FEE,
             PREPARE_GAS,
         );
+    }
+    #[payable]
+    pub fn check_ticket(&mut self, ticket_id: String) {
+        assert_one_yocto();
+        assert!(self.tokens.owner_by_id.get(&ticket_id) == Some(env::predecessor_account_id()), "You do not own the ticket");
+        let mut ticket = self.tickets.get(&ticket_id).unwrap_or_else(|| env::panic(b"ticket id does not exist!"));
+        ticket.is_used = true;
+        self.tickets.insert(&ticket_id, &ticket);
+        log!("{}", format!("Ticket {} is checked", ticket_id));
     }
     #[payable]
     #[private]
