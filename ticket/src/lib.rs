@@ -95,10 +95,11 @@ impl Contract {
         show_description: Option<String>,
         ticket_types: Vec<String>,     // required, type ticket => amount
         tickets_supply: Vec<u64>,      // required
-        ticket_prices: Vec<Balance>,   // required, type ticket =>
+        ticket_prices: Vec<f64>,   // required, type ticket =>
         selling_start_time: Timestamp, // required
         selling_end_time: Timestamp,
     ) {
+        assert!(self.shows.get(&show_id).is_none(), "This show exist");
         assert!(
             env::predecessor_account_id() == self.owner_id,
             "Caller is not owner"
@@ -109,7 +110,8 @@ impl Contract {
         for i in 0..ticket_types.len() {
             total_supply_ticket_by_type.insert(ticket_types[i].clone(), tickets_supply[i]);
             ticket_sold_by_type.insert(ticket_types[i].clone(), 0u64);
-            ticket_price_by_type.insert(ticket_types[i].clone(), ticket_prices[i]);
+            let price: Balance = (ticket_prices[i] * 1_000_000_000_000_000_000_000_000u128 as f64).round() as Balance + MINT_FEE;
+            ticket_price_by_type.insert(ticket_types[i].clone(), price);
         }
         self.shows.insert(
             &show_id.clone(),
@@ -188,7 +190,7 @@ impl Contract {
     //         "Please deposit exactly price of ticket"
     //     );
     // }
-    
+
     #[payable]
     pub fn check_ticket(&mut self, ticket_id: String) {
         assert_one_yocto();
