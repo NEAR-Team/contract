@@ -28,7 +28,7 @@ impl Contract {
     pub fn create_new_ticket_contract(&mut self, prefix: String, metadata: TicketContractMetadata) -> Promise {
         assert!(
             env::attached_deposit() == CREATE_CONTRACT_FEE + INITIAL_BALANCE,
-            "Not enough Near to create contract"
+            "Please deposit exactly contract creation fee"
         );
         let subaccount_id = format!("{}.{}", prefix, env::current_account_id());
         log!("{}", format!("Creating new ticket contract at account {}", subaccount_id));
