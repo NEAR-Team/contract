@@ -1,7 +1,7 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::UnorderedMap;
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{env, ext_contract, near_bindgen, AccountId, Balance, Gas, PanicOnDefault, Promise, log};
+use near_sdk::{env, ext_contract, near_bindgen, AccountId, Balance, Gas, PanicOnDefault, Promise, log, PromiseResult};
 
 near_sdk::setup_alloc!();
 const CODE: &[u8] = include_bytes!("../../ticket/res/contract.wasm");
@@ -25,13 +25,13 @@ impl Contract {
         }
     }
     #[payable]
-    pub fn create_new_ticket_contract(&mut self, prefix: String, metadata: TicketContractMetadata) {
+    pub fn create_new_ticket_contract(&mut self, prefix: String, metadata: TicketContractMetadata) -> Promise {
         assert!(
             env::attached_deposit() == CREATE_CONTRACT_FEE + INITIAL_BALANCE,
             "Not enough Near to create contract"
         );
         let subaccount_id = format!("{}.{}", prefix, env::current_account_id());
-        log!("{}", format!("Create new ticket contract at account {}", subaccount_id));
+        log!("{}", format!("Creating new ticket contract at account {}", subaccount_id));
         let mut ticket_contracts = self.ticket_contracts_by_owner.get(&env::predecessor_account_id()).unwrap_or_else(|| Vec::new());
         ticket_contracts.push(subaccount_id.clone());
         self.ticket_contracts_by_owner.insert(&env::predecessor_account_id(), &ticket_contracts);
@@ -46,7 +46,27 @@ impl Contract {
                 &subaccount_id,
                 0,
                 PREPARE_GAS,
-            ));
+            ))
+            .then(ex_self::check_create_new_contract(
+                env::predecessor_account_id(),
+                &env::current_account_id(),
+                0,
+                5_000_000_000_000
+            ))
+    }
+    #[private]
+    pub fn check_create_new_contract(&mut self, creater_account: AccountId) {
+        let mut result: bool = true;
+        for i in 0..env::promise_results_count(){
+            if env::promise_result(i) == PromiseResult::Failed {
+                result = false; 
+                break
+            }
+        };
+        if result == false {
+            log!("Fail to create new ticket contract");
+            Promise::new(creater_account).transfer(INITIAL_BALANCE + CREATE_CONTRACT_FEE);
+        }
     }
     pub fn get_contracts_by_owner(&self, owner_id: AccountId) -> Vec<AccountId>{
         self.ticket_contracts_by_owner.get(&owner_id).unwrap_or_else(|| Vec::new())
@@ -57,6 +77,11 @@ impl Contract {
 trait TTicketContract {
     fn new(owner_id: AccountId, metadata: TicketContractMetadata) -> Self;
 }
+#[ext_contract(ex_self)]
+trait TContractSelf{
+    fn check_create_new_contract(&mut self, creater_account: AccountId);
+}
+
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]

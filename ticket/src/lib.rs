@@ -19,7 +19,7 @@ use near_contract_standards::non_fungible_token::metadata::TokenMetadata;
 use near_contract_standards::non_fungible_token::NonFungibleToken;
 use near_contract_standards::non_fungible_token::{Token, TokenId};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LazyOption, UnorderedMap};
+use near_sdk::collections::{LazyOption, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::ValidAccountId;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
@@ -126,7 +126,7 @@ impl Contract {
         );
     }
     #[payable]
-    pub fn buy_ticket(&mut self, show_id: String, ticket_type: String) {
+    pub fn buy_ticket(&mut self, show_id: String, ticket_type: String) -> Promise {
         let show = self.shows.get(&show_id).unwrap();
         assert!(
             env::block_timestamp() > show.selling_start_time,
@@ -165,8 +165,30 @@ impl Contract {
             &env::current_account_id(),
             MINT_FEE,
             PREPARE_GAS,
-        );
+        )
     }
+    // pub fn buy_tickets(&mut self, show_id: String, ticket_type: String, amount: u64) {
+    //     let show = self.shows.get(&show_id).unwrap();
+    //     assert!(
+    //         env::block_timestamp() > show.selling_start_time,
+    //         "This show has not started selling tickets yet"
+    //     );
+    //     assert!(
+    //         env::block_timestamp() < show.selling_end_time,
+    //         "This show has ended ticket sales"
+    //     );
+    //     assert!(
+    //         *show.ticket_sold_by_type.get(&ticket_type).unwrap() + amount
+    //             < *show.total_supply_ticket_by_type.get(&ticket_type).unwrap(),
+    //         "All tickets are sold out"
+    //     );
+    //     assert!(
+    //         env::attached_deposit()
+    //             == *show.ticket_price_by_type.get(&ticket_type).unwrap() + MINT_FEE,
+    //         "Please deposit exactly price of ticket"
+    //     );
+    // }
+    
     #[payable]
     pub fn check_ticket(&mut self, ticket_id: String) {
         assert_one_yocto();
@@ -223,6 +245,11 @@ impl Contract {
 
     pub fn ticket_metadata(&self, token_id: TokenId) -> TicketMetadata {
         self.tickets.get(&token_id).unwrap()
+    }
+
+    pub fn get_tickets_by_owner(&self, owner: AccountId) -> Vec<TicketMetadata> {
+        let token_ids = self.tokens.tokens_per_owner.as_ref().unwrap().get(&owner).unwrap_or_else(|| UnorderedSet::new(b"".to_vec()));
+        token_ids.iter().map(|token_id| self.tickets.get(&token_id).unwrap()).collect()
     }
 }
 
