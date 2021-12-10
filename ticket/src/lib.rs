@@ -23,8 +23,8 @@ use near_sdk::collections::{LazyOption, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::ValidAccountId;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
-    env, ext_contract, log, near_bindgen, AccountId, Balance, BorshStorageKey, Gas, PanicOnDefault,
-    Promise, PromiseOrValue, Timestamp, assert_one_yocto
+    assert_one_yocto, env, ext_contract, log, near_bindgen, AccountId, Balance, BorshStorageKey,
+    Gas, PanicOnDefault, Promise, PromiseOrValue, Timestamp,
 };
 
 const MINT_FEE: Balance = 1_000_000_000_000_000_000_000_0;
@@ -94,8 +94,8 @@ impl Contract {
         show_title: Option<String>,
         show_description: Option<String>,
         ticket_types: Vec<String>,     // required, type ticket => amount
-        tickets_supply: Vec<u64>,      // required
-        ticket_prices: Vec<f64>,   // required, type ticket =>
+        tickets_supply: Vec<u32>,      // required
+        ticket_prices: Vec<f64>,       // required, type ticket =>
         selling_start_time: Timestamp, // required
         selling_end_time: Timestamp,
     ) {
@@ -104,14 +104,18 @@ impl Contract {
             env::predecessor_account_id() == self.owner_id,
             "Caller is not owner"
         );
-        let mut ticket_sold_by_type = HashMap::new();
-        let mut total_supply_ticket_by_type = HashMap::new();
-        let mut ticket_price_by_type = HashMap::new();
+        let mut ticket_infos = HashMap::new();
         for i in 0..ticket_types.len() {
-            total_supply_ticket_by_type.insert(ticket_types[i].clone(), tickets_supply[i]);
-            ticket_sold_by_type.insert(ticket_types[i].clone(), 0u64);
-            let price: Balance = (ticket_prices[i] * 1_000_000_000_000_000_000_000_000u128 as f64).round() as Balance + MINT_FEE;
-            ticket_price_by_type.insert(ticket_types[i].clone(), price);
+            let price: Balance = (ticket_prices[i] * 1_000_000_000_000_000_000_000_000u128 as f64)
+                .round() as Balance
+                + MINT_FEE;
+            let ticket_info = TicketInfo {
+                supply: tickets_supply[i],            // required
+                ticket_type: ticket_types[i].clone(), // required,
+                price: price,
+                sold: 0u32,
+            };
+            ticket_infos.insert(ticket_types[i].clone(), ticket_info);
         }
         self.shows.insert(
             &show_id.clone(),
@@ -119,9 +123,7 @@ impl Contract {
                 show_id,
                 show_title,
                 show_description,
-                ticket_sold_by_type,
-                total_supply_ticket_by_type,
-                ticket_price_by_type,
+                ticket_infos,
                 selling_start_time,
                 selling_end_time,
             },
@@ -139,28 +141,30 @@ impl Contract {
             "This show has ended ticket sales"
         );
         assert!(
-            show.ticket_sold_by_type.get(&ticket_type).unwrap()
-                < show.total_supply_ticket_by_type.get(&ticket_type).unwrap(),
+            show.ticket_infos.get(&ticket_type).unwrap().sold
+                < show.ticket_infos.get(&ticket_type).unwrap().supply,
             "All tickets are sold out"
         );
         assert!(
-            env::attached_deposit()
-                == *show.ticket_price_by_type.get(&ticket_type).unwrap() + MINT_FEE,
+            env::attached_deposit() == show.ticket_infos.get(&ticket_type).unwrap().price,
             "Please deposit exactly price of ticket"
         );
         let ticket_id = format!(
             "{}.{}.{}",
             show_id,
             ticket_type,
-            show.ticket_sold_by_type.get(&ticket_type).unwrap()
+            show.ticket_infos.get(&ticket_type).unwrap().sold
         );
-        log!("{}",format!(
-            "Buy new ticket: show id: {}, ticket type: {}, ticket id: {}, price: {} YoctoNear",
-            show_id,
-            ticket_type,
-            ticket_id,
-            show.ticket_price_by_type.get(&ticket_type).unwrap()
-        ));
+        log!(
+            "{}",
+            format!(
+                "Buy new ticket: show id: {}, ticket type: {}, ticket id: {}, price: {} YoctoNear",
+                show_id,
+                ticket_type,
+                ticket_id,
+                show.ticket_infos.get(&ticket_type).unwrap().price
+            )
+        );
         ex_self::nft_private_mint(
             ticket_id,
             ValidAccountId::try_from(env::predecessor_account_id()).unwrap(),
@@ -194,8 +198,14 @@ impl Contract {
     #[payable]
     pub fn check_ticket(&mut self, ticket_id: String) {
         assert_one_yocto();
-        assert!(self.tokens.owner_by_id.get(&ticket_id) == Some(env::predecessor_account_id()), "You do not own the ticket");
-        let mut ticket = self.tickets.get(&ticket_id).unwrap_or_else(|| env::panic(b"ticket id does not exist!"));
+        assert!(
+            self.tokens.owner_by_id.get(&ticket_id) == Some(env::predecessor_account_id()),
+            "You do not own the ticket"
+        );
+        let mut ticket = self
+            .tickets
+            .get(&ticket_id)
+            .unwrap_or_else(|| env::panic(b"ticket id does not exist!"));
         ticket.is_used = true;
         self.tickets.insert(&ticket_id, &ticket);
         log!("{}", format!("Ticket {} is checked", ticket_id));
@@ -206,10 +216,10 @@ impl Contract {
         let token_id_split: Vec<&str> = token_id.split(".").collect();
         let show_id = token_id_split[0].to_string();
         let ticket_type = token_id_split[1].to_string();
-        let mut count: u64 = token_id_split[2].parse().unwrap();
-        count += 1;
         let mut show = self.shows.get(&show_id).unwrap();
-        show.ticket_sold_by_type.insert(ticket_type.clone(), count);
+        let mut ticket_info = show.ticket_infos.get(&ticket_type).unwrap().clone();
+        ticket_info.sold += 1;
+        show.ticket_infos.insert(ticket_type.clone(), ticket_info);
         self.shows.insert(&show_id, &show);
         self.tickets.insert(
             &token_id,
@@ -241,6 +251,25 @@ impl Contract {
         )
     }
 
+    pub fn get_active_shows(&self) -> Vec<ShowMetadata> {
+        self.shows
+            .values()
+            .filter_map(|show| {
+                if show.selling_start_time < env::block_timestamp()
+                    && show.selling_end_time > env::block_timestamp()
+                {
+                    Some(show)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    pub fn get_all_shows(&self) -> Vec<ShowMetadata> {
+        self.shows.values().collect()
+    }
+
     pub fn show_metadata(&self, show_id: String) -> ShowMetadata {
         self.shows.get(&show_id).unwrap()
     }
@@ -250,8 +279,17 @@ impl Contract {
     }
 
     pub fn get_tickets_by_owner(&self, owner: AccountId) -> Vec<TicketMetadata> {
-        let token_ids = self.tokens.tokens_per_owner.as_ref().unwrap().get(&owner).unwrap_or_else(|| UnorderedSet::new(b"".to_vec()));
-        token_ids.iter().map(|token_id| self.tickets.get(&token_id).unwrap()).collect()
+        let token_ids = self
+            .tokens
+            .tokens_per_owner
+            .as_ref()
+            .unwrap()
+            .get(&owner)
+            .unwrap_or_else(|| UnorderedSet::new(b"".to_vec()));
+        token_ids
+            .iter()
+            .map(|token_id| self.tickets.get(&token_id).unwrap())
+            .collect()
     }
 }
 
@@ -287,15 +325,27 @@ pub struct TicketMetadata {
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
+pub struct TicketInfo {
+    pub supply: u32,         // required
+    pub ticket_type: String, // required,
+    pub price: Balance,
+    pub sold: u32,
+    // pub selling_start_time: Timestamp,
+    // pub selling_end_time: Timestamp,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
 pub struct ShowMetadata {
     pub show_id: String, // required,
     pub show_title: Option<String>,
     pub show_description: Option<String>,
-    pub total_supply_ticket_by_type: HashMap<String, u64>, // required, type ticket => amount
-    pub ticket_sold_by_type: HashMap<String, u64>,         // required, type ticket => sold amount
-    pub ticket_price_by_type: HashMap<String, Balance>,    // required, type ticket =>
-    pub selling_start_time: Timestamp,                     // required
-    pub selling_end_time: Timestamp,                       // required
+    pub ticket_infos: HashMap<String, TicketInfo>,
+    // pub total_supply_ticket_by_type: HashMap<String, u64>, // required, type ticket => amount
+    // pub ticket_sold_by_type: HashMap<String, u64>,         // required, type ticket => sold amount
+    // pub ticket_price_by_type: HashMap<String, Balance>,    // required, type ticket =>
+    pub selling_start_time: Timestamp, // required
+    pub selling_end_time: Timestamp,   // required
 }
 
 #[ext_contract(ex_self)]
