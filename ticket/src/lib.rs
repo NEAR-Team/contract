@@ -23,8 +23,8 @@ use near_sdk::collections::{LazyOption, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::ValidAccountId;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
-    env, ext_contract, log, near_bindgen, AccountId, Balance, BorshStorageKey, Gas, PanicOnDefault,
-    Promise, PromiseOrValue, Timestamp, assert_one_yocto
+    assert_one_yocto, env, ext_contract, log, near_bindgen, AccountId, Balance, BorshStorageKey,
+    Gas, PanicOnDefault, Promise, PromiseOrValue, Timestamp,
 };
 
 const MINT_FEE: Balance = 1_000_000_000_000_000_000_000_0;
@@ -93,9 +93,9 @@ impl Contract {
         show_id: String, // required,
         show_title: Option<String>,
         show_description: Option<String>,
-        ticket_types: Vec<String>,     // required, type ticket => amount
-        tickets_supply: Vec<u64>,      // required
-        ticket_prices: Vec<f64>,   // required, type ticket =>
+        ticket_types: Vec<String>, // required, type ticket => amount
+        tickets_supply: Vec<u64>,  // required
+        ticket_prices: Vec<String>,
         selling_start_time: Timestamp, // required
         selling_end_time: Timestamp,
     ) {
@@ -110,8 +110,8 @@ impl Contract {
         for i in 0..ticket_types.len() {
             total_supply_ticket_by_type.insert(ticket_types[i].clone(), tickets_supply[i]);
             ticket_sold_by_type.insert(ticket_types[i].clone(), 0u64);
-            let price: Balance = (ticket_prices[i] * 1_000_000_000_000_000_000_000_000u128 as f64).round() as Balance + MINT_FEE;
-            ticket_price_by_type.insert(ticket_types[i].clone(), price);
+            let price: Balance = ticket_prices[i].parse().unwrap();
+            ticket_price_by_type.insert(ticket_types[i].clone(), price + MINT_FEE);
         }
         self.shows.insert(
             &show_id.clone(),
@@ -154,13 +154,16 @@ impl Contract {
             ticket_type,
             show.ticket_sold_by_type.get(&ticket_type).unwrap()
         );
-        log!("{}",format!(
-            "Buy new ticket: show id: {}, ticket type: {}, ticket id: {}, price: {} YoctoNear",
-            show_id,
-            ticket_type,
-            ticket_id,
-            show.ticket_price_by_type.get(&ticket_type).unwrap()
-        ));
+        log!(
+            "{}",
+            format!(
+                "Buy new ticket: show id: {}, ticket type: {}, ticket id: {}, price: {} YoctoNear",
+                show_id,
+                ticket_type,
+                ticket_id,
+                show.ticket_price_by_type.get(&ticket_type).unwrap()
+            )
+        );
         ex_self::nft_private_mint(
             ticket_id,
             ValidAccountId::try_from(env::predecessor_account_id()).unwrap(),
@@ -194,8 +197,14 @@ impl Contract {
     #[payable]
     pub fn check_ticket(&mut self, ticket_id: String) {
         assert_one_yocto();
-        assert!(self.tokens.owner_by_id.get(&ticket_id) == Some(env::predecessor_account_id()), "You do not own the ticket");
-        let mut ticket = self.tickets.get(&ticket_id).unwrap_or_else(|| env::panic(b"ticket id does not exist!"));
+        assert!(
+            self.tokens.owner_by_id.get(&ticket_id) == Some(env::predecessor_account_id()),
+            "You do not own the ticket"
+        );
+        let mut ticket = self
+            .tickets
+            .get(&ticket_id)
+            .unwrap_or_else(|| env::panic(b"ticket id does not exist!"));
         ticket.is_used = true;
         self.tickets.insert(&ticket_id, &ticket);
         log!("{}", format!("Ticket {} is checked", ticket_id));
@@ -250,8 +259,17 @@ impl Contract {
     }
 
     pub fn get_tickets_by_owner(&self, owner: AccountId) -> Vec<TicketMetadata> {
-        let token_ids = self.tokens.tokens_per_owner.as_ref().unwrap().get(&owner).unwrap_or_else(|| UnorderedSet::new(b"".to_vec()));
-        token_ids.iter().map(|token_id| self.tickets.get(&token_id).unwrap()).collect()
+        let token_ids = self
+            .tokens
+            .tokens_per_owner
+            .as_ref()
+            .unwrap()
+            .get(&owner)
+            .unwrap_or_else(|| UnorderedSet::new(b"".to_vec()));
+        token_ids
+            .iter()
+            .map(|token_id| self.tickets.get(&token_id).unwrap())
+            .collect()
     }
 }
 
