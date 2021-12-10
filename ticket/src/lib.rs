@@ -93,9 +93,9 @@ impl Contract {
         show_id: String, // required,
         show_title: Option<String>,
         show_description: Option<String>,
-        ticket_types: Vec<String>,     // required, type ticket => amount
-        tickets_supply: Vec<u64>,      // required
-        ticket_prices: Vec<f64>,   // required, type ticket =>
+        ticket_types: Vec<String>, // required, type ticket => amount
+        tickets_supply: Vec<u64>,  // required
+        ticket_prices: Vec<String>,
         selling_start_time: Timestamp, // required
         selling_end_time: Timestamp,
     ) {
@@ -110,8 +110,8 @@ impl Contract {
         for i in 0..ticket_types.len() {
             total_supply_ticket_by_type.insert(ticket_types[i].clone(), tickets_supply[i]);
             ticket_sold_by_type.insert(ticket_types[i].clone(), 0u64);
-            let price: Balance = (ticket_prices[i] * 1_000_000_000_000_000_000_000_000u128 as f64).round() as Balance + MINT_FEE;
-            ticket_price_by_type.insert(ticket_types[i].clone(), price);
+            let price: Balance = ticket_prices[i].parse().unwrap();
+            ticket_price_by_type.insert(ticket_types[i].clone(), price + MINT_FEE);
         }
         self.shows.insert(
             &show_id.clone(),
