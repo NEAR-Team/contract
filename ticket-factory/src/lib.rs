@@ -5,7 +5,7 @@ use near_sdk::{env, ext_contract, near_bindgen, AccountId, Balance, Gas, PanicOn
 
 near_sdk::setup_alloc!();
 const CODE: &[u8] = include_bytes!("../../ticket/res/contract.wasm");
-const INITIAL_BALANCE: Balance = 6_500_000_000_000_000_000_000_000;
+const INITIAL_BALANCE: Balance = 3_500_000_000_000_000_000_000_000;
 const CREATE_CONTRACT_FEE: Balance = 5_000_000_000_000_000_000_000_000;
 const PREPARE_GAS: Gas = 25_000_000_000_000;
 #[near_bindgen]
