@@ -28,7 +28,7 @@ impl Contract {
     pub fn create_new_ticket_contract(&mut self, prefix: String, metadata: TicketContractMetadata) -> Promise {
         assert!(
             env::attached_deposit() == CREATE_CONTRACT_FEE + INITIAL_BALANCE,
-            "Please deposit exactly contract creation fee"
+            "Please deposit exadev-1638791905713-87656037939678ctly contract creation fee"
         );
         let subaccount_id = format!("{}.{}", prefix, env::current_account_id());
         log!("{}", format!("Creating new ticket contract at account {}", subaccount_id));
@@ -55,7 +55,7 @@ impl Contract {
             ))
     }
     #[private]
-    pub fn check_create_new_contract(&mut self, creater_account: AccountId) {
+    pub fn check_create_new_contract(&self, creater_account: AccountId) {
         let mut result: bool = true;
         for i in 0..env::promise_results_count(){
             if env::promise_result(i) == PromiseResult::Failed {

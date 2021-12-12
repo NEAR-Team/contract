@@ -24,7 +24,7 @@ use near_sdk::json_types::ValidAccountId;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     assert_one_yocto, env, ext_contract, log, near_bindgen, AccountId, Balance, BorshStorageKey,
-    Gas, PanicOnDefault, Promise, PromiseOrValue, Timestamp,
+    Gas, PanicOnDefault, Promise, PromiseOrValue, PromiseResult, Timestamp,
 };
 
 const MINT_FEE: Balance = 1_000_000_000_000_000_000_000_0;
@@ -172,6 +172,13 @@ impl Contract {
             MINT_FEE,
             PREPARE_GAS,
         )
+        .then(ex_self::check_mint(
+            env::predecessor_account_id(),
+            show.ticket_infos.get(&ticket_type).unwrap().price,
+            &env::current_account_id(),
+            0,
+            5_000_000_000_000_0,
+        ))
     }
     // pub fn buy_tickets(&mut self, show_id: String, ticket_type: String, amount: u64) {
     //     let show = self.shows.get(&show_id).unwrap();
@@ -249,6 +256,20 @@ impl Contract {
                 reference_hash: None, // Base64-encoded sha256 hash of JSON from reference field. Required if `reference` is included.
             }),
         )
+    }
+
+    pub fn check_mint(&self, buyer: AccountId, price: Balance) {
+        let mut result: bool = true;
+        for i in 0..env::promise_results_count() {
+            if env::promise_result(i) == PromiseResult::Failed {
+                result = false;
+                break;
+            }
+        }
+        if result == false {
+            log!("Fail to create new ticket contract");
+            Promise::new(buyer).transfer(price);
+        }
     }
 
     pub fn get_active_shows(&self) -> Vec<ShowMetadata> {
@@ -351,4 +372,5 @@ pub struct ShowMetadata {
 #[ext_contract(ex_self)]
 trait TTicketContract {
     fn nft_private_mint(&mut self, token_id: TokenId, receiver_id: ValidAccountId) -> Token;
+    fn check_mint(&self, buyer: AccountId, price: Balance);
 }
