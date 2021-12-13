@@ -75,7 +75,12 @@ impl Contract {
     pub fn transfer_ownership(&mut self, new_owner: ValidAccountId) {
         assert!(
             env::predecessor_account_id() == self.owner_id,
-            "Caller is not owner"
+            "{}",
+            format!(
+                "Caller {} is not owner: {}",
+                env::predecessor_account_id(),
+                self.owner_id
+            )
         );
         self.owner_id = new_owner.into();
     }
@@ -83,7 +88,12 @@ impl Contract {
     pub fn renounce_ownership(&mut self) {
         assert!(
             env::predecessor_account_id() == self.owner_id,
-            "Caller is not owner"
+            "{}",
+            format!(
+                "Caller {} is not owner: {}",
+                env::predecessor_account_id(),
+                self.owner_id
+            )
         );
         self.owner_id = String::new();
     }
@@ -102,7 +112,12 @@ impl Contract {
         assert!(self.shows.get(&show_id).is_none(), "This show exist");
         assert!(
             env::predecessor_account_id() == self.owner_id,
-            "Caller is not owner"
+            "{}",
+            format!(
+                "Caller {} is not owner: {}",
+                env::predecessor_account_id(),
+                self.owner_id
+            )
         );
         let mut ticket_infos = HashMap::new();
         for i in 0..ticket_types.len() {
@@ -134,11 +149,16 @@ impl Contract {
         let show = self.shows.get(&show_id).unwrap();
         assert!(
             env::block_timestamp() > show.selling_start_time,
-            "This show has not started selling tickets yet"
+            "{}",
+            format!(
+                "This show has not started selling tickets yet {}",
+                show.selling_start_time
+            )
         );
         assert!(
             env::block_timestamp() < show.selling_end_time,
-            "This show has ended ticket sales"
+            "{}",
+            format!("This show has ended ticket sales {}", show.selling_end_time)
         );
         assert!(
             show.ticket_infos.get(&ticket_type).unwrap().sold
@@ -146,8 +166,13 @@ impl Contract {
             "All tickets are sold out"
         );
         assert!(
-            env::attached_deposit() == show.ticket_infos.get(&ticket_type).unwrap().price,
-            "Please deposit exactly price of ticket"
+            env::attached_deposit() >= show.ticket_infos.get(&ticket_type).unwrap().price,
+            "{}",
+            format!(
+                "Please deposit exactly price of ticket {}. You deposit {}",
+                show.ticket_infos.get(&ticket_type).unwrap().price,
+                env::attached_deposit()
+            )
         );
         let ticket_id = format!(
             "{}.{}.{}",
@@ -207,7 +232,11 @@ impl Contract {
         assert_one_yocto();
         assert!(
             self.tokens.owner_by_id.get(&ticket_id) == Some(env::predecessor_account_id()),
-            "You do not own the ticket"
+            "{}",
+            format!(
+                "You do not own the ticket {}",
+                self.tokens.owner_by_id.get(&ticket_id).unwrap()
+            )
         );
         let mut ticket = self
             .tickets
