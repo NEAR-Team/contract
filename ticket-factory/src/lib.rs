@@ -1,7 +1,10 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::UnorderedMap;
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{env, ext_contract, near_bindgen, AccountId, Balance, Gas, PanicOnDefault, Promise, log, PromiseResult};
+use near_sdk::{
+    env, ext_contract, log, near_bindgen, AccountId, Balance, Gas, PanicOnDefault, Promise,
+    PromiseResult,
+};
 
 near_sdk::setup_alloc!();
 const CODE: &[u8] = include_bytes!("../../ticket/res/contract.wasm");
@@ -13,6 +16,7 @@ const PREPARE_GAS: Gas = 25_000_000_000_000;
 pub struct Contract {
     pub owner_id: AccountId,
     pub ticket_contracts_by_owner: UnorderedMap<AccountId, Vec<AccountId>>,
+    pub ticket_contracts: Vec<AccountId>,
 }
 
 #[near_bindgen]
@@ -22,19 +26,34 @@ impl Contract {
         Self {
             owner_id,
             ticket_contracts_by_owner: UnorderedMap::new(b"ticket_contract_by_owner".to_vec()),
+            ticket_contracts: Vec::new(),
         }
     }
     #[payable]
-    pub fn create_new_ticket_contract(&mut self, prefix: String, metadata: TicketContractMetadata) -> Promise {
+    pub fn create_new_ticket_contract(
+        &mut self,
+        prefix: String,
+        metadata: TicketContractMetadata,
+    ) -> Promise {
         assert!(
             env::attached_deposit() == CREATE_CONTRACT_FEE + INITIAL_BALANCE,
             "Please deposit exactly contract creation fee"
         );
         let subaccount_id = format!("{}.{}", prefix, env::current_account_id());
-        log!("{}", format!("Creating new ticket contract at account {}", subaccount_id));
-        let mut ticket_contracts = self.ticket_contracts_by_owner.get(&env::predecessor_account_id()).unwrap_or_else(|| Vec::new());
+        log!(
+            "{}",
+            format!("Creating new ticket contract at account {}", subaccount_id)
+        );
+        let mut ticket_contracts = self
+            .ticket_contracts_by_owner
+            .get(&env::predecessor_account_id())
+            .unwrap_or_else(|| Vec::new());
         ticket_contracts.push(subaccount_id.clone());
-        self.ticket_contracts_by_owner.insert(&env::predecessor_account_id(), &ticket_contracts);
+        self.ticket_contracts_by_owner
+            .insert(&env::predecessor_account_id(), &ticket_contracts);
+
+        self.ticket_contracts.push(subaccount_id.clone());
+
         Promise::new(subaccount_id.clone())
             .create_account()
             .transfer(INITIAL_BALANCE)
@@ -51,25 +70,31 @@ impl Contract {
                 env::predecessor_account_id(),
                 &env::current_account_id(),
                 0,
-                5_000_000_000_000
+                5_000_000_000_000,
             ))
     }
     #[private]
     pub fn check_create_new_contract(&self, creater_account: AccountId) {
         let mut result: bool = true;
-        for i in 0..env::promise_results_count(){
+        for i in 0..env::promise_results_count() {
             if env::promise_result(i) == PromiseResult::Failed {
-                result = false; 
-                break
+                result = false;
+                break;
             }
-        };
+        }
         if result == false {
             log!("Fail to create new ticket contract");
             Promise::new(creater_account).transfer(INITIAL_BALANCE + CREATE_CONTRACT_FEE);
         }
     }
-    pub fn get_contracts_by_owner(&self, owner_id: AccountId) -> Vec<AccountId>{
-        self.ticket_contracts_by_owner.get(&owner_id).unwrap_or_else(|| Vec::new())
+    pub fn get_contracts_by_owner(&self, owner_id: AccountId) -> Vec<AccountId> {
+        self.ticket_contracts_by_owner
+            .get(&owner_id)
+            .unwrap_or_else(|| Vec::new())
+    }
+
+    pub fn get_ticket_contracts(&self) -> Vec<AccountId> {
+        self.ticket_contracts.clone()
     }
 }
 
@@ -78,10 +103,9 @@ trait TTicketContract {
     fn new(owner_id: AccountId, metadata: TicketContractMetadata) -> Self;
 }
 #[ext_contract(ex_self)]
-trait TContractSelf{
+trait TContractSelf {
     fn check_create_new_contract(&mut self, creater_account: AccountId);
 }
-
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
