@@ -283,11 +283,11 @@ impl Contract {
             token_id,
             receiver_id,
             Some(TokenMetadata {
-                title: None,       // ex. "Arch Nemesis: Mail Carrier" or "Parcel #5055"
-                description: None, // free-form description
-                media: None, // URL to associated media, preferably to decentralized, content-addressed storage
+                title: Some("B-Event".to_string()), // ex. "Arch Nemesis: Mail Carrier" or "Parcel #5055"
+                description: Some("B-Event ticket".to_string()), // free-form description
+                media: Some("https://res.cloudinary.com/dcrbaasbt/image/upload/v1639640365/265266702_588262069101334_1825137514299467956_n_tiyp60.png".to_string()), // URL to associated media, preferably to decentralized, content-addressed storage
                 media_hash: None, // Base64-encoded sha256 hash of content referenced by the `media` field. Required if `media` is included.
-                copies: None, // number of copies of this set of metadata in existence when token was minted.
+                copies: Some(1), // number of copies of this set of metadata in existence when token was minted.
                 issued_at: Some(env::block_timestamp().to_string()), // ISO 8601 datetime when token was issued or minted
                 expires_at: None,     // ISO 8601 datetime when token expires
                 starts_at: None,      // ISO 8601 datetime when token starts being valid
