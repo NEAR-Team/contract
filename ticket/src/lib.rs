@@ -111,7 +111,7 @@ impl Contract {
         show.ticket_infos.insert(info.ticket_type.clone(), info);
         self.shows.insert(&show_id, &show);
     }   
-    // Add ticket info
+    // Edit ticket info
     pub fn edit_ticket_info(&mut self, show_id: String,  info: TicketInfo){
         assert!(!self.shows.get(&show_id).is_none(), "This show not exist");
         assert!(
