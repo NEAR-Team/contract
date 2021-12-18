@@ -98,7 +98,7 @@ impl Contract {
         self.owner_id = String::new();
     }
     // Add ticket info
-    pub fn add_ticket_info(&mut self, show_id: String, info: TicketInfo) {
+    pub fn add_ticket_info(&mut self, show_id: String,  info: TicketInfo){
         assert!(!self.shows.get(&show_id).is_none(), "This show not exist");
         assert!(
             env::predecessor_account_id() == self.owner_id,
@@ -107,15 +107,12 @@ impl Contract {
             self.owner_id
         );
         let mut show = self.shows.get(&show_id).unwrap();
-        assert!(
-            show.ticket_infos.get(&info.ticket_type).is_none(),
-            "This ticket info already exist"
-        );
+        assert!(show.ticket_infos.get(&info.ticket_type).is_none(), "This ticket info already exist");
         show.ticket_infos.insert(info.ticket_type.clone(), info);
         self.shows.insert(&show_id, &show);
-    }
+    }   
     // Add ticket info
-    pub fn edit_ticket_info(&mut self, show_id: String, info: TicketInfo) {
+    pub fn edit_ticket_info(&mut self, show_id: String,  info: TicketInfo){
         assert!(!self.shows.get(&show_id).is_none(), "This show not exist");
         assert!(
             env::predecessor_account_id() == self.owner_id,
@@ -124,24 +121,19 @@ impl Contract {
             self.owner_id
         );
         let mut show = self.shows.get(&show_id).unwrap();
-        assert!(
-            !show.ticket_infos.get(&info.ticket_type).is_none(),
-            "This ticket is not exist"
-        );
+        assert!(!show.ticket_infos.get(&info.ticket_type).is_none(), "This ticket is not exist");
         show.ticket_infos.insert(info.ticket_type.clone(), info);
         self.shows.insert(&show_id, &show);
-    }
+    }   
     /// Create new show
     pub fn create_new_show(
         &mut self,
         show_id: String, // required,
         show_title: Option<String>,
         show_description: Option<String>,
-        show_time: Timestamp,
-        show_banner: Option<String>,
         ticket_types: Vec<String>,     // required, type ticket => amount
         tickets_supply: Vec<u32>,      // required
-        ticket_prices: Vec<f64>,       // required, type ticket =>
+        ticket_prices: Vec<U128>,       // required, type ticket =>
         selling_start_time: Timestamp, // required
         selling_end_time: Timestamp,
     ) {
@@ -157,20 +149,17 @@ impl Contract {
         );
         let mut ticket_infos = HashMap::new();
         for i in 0..ticket_types.len() {
-            let price: Balance = (ticket_prices[i] * 1_000_000_000_000_000_000_000_000u128 as f64)
-                .round() as Balance
-                + MINT_FEE;
+            let price: Balance = ticket_prices[i].into();
             let ticket_info = TicketInfo {
                 supply: tickets_supply[i],            // required
                 ticket_type: ticket_types[i].clone(), // required,
-                price: price,
+                price: price + MINT_FEE,
                 sold: 0u32,
                 selling_start_time: Some(0u64),
-                selling_end_time: Some(0u64),
+                selling_end_time: Some(0u64)
             };
             ticket_infos.insert(ticket_types[i].clone(), ticket_info);
         }
-
         self.shows.insert(
             &show_id.clone(),
             &ShowMetadata {
@@ -178,8 +167,6 @@ impl Contract {
                 show_title,
                 show_description,
                 ticket_infos,
-                show_time,
-                show_banner,
                 selling_start_time,
                 selling_end_time,
             },
@@ -192,11 +179,11 @@ impl Contract {
             env::block_timestamp() > show.selling_start_time,
             "This show has not started selling tickets yet {}",
             show.selling_start_time
+            
         );
         assert!(
             env::block_timestamp() < show.selling_end_time,
-            "This show has ended ticket sales {}",
-            show.selling_end_time
+            "This show has ended ticket sales {}", show.selling_end_time
         );
         assert!(
             show.ticket_infos.get(&ticket_type).unwrap().sold
@@ -208,6 +195,7 @@ impl Contract {
             "Please deposit exactly price of ticket {}. You deposit {}",
             show.ticket_infos.get(&ticket_type).unwrap().price,
             env::attached_deposit()
+            
         );
         let ticket_id = format!(
             "{}.{}.{}",
@@ -240,6 +228,27 @@ impl Contract {
             5_000_000_000_000_0,
         ))
     }
+    // pub fn buy_tickets(&mut self, show_id: String, ticket_type: String, amount: u64) {
+    //     let show = self.shows.get(&show_id).unwrap();
+    //     assert!(
+    //         env::block_timestamp() > show.selling_start_time,
+    //         "This show has not started selling tickets yet"
+    //     );
+    //     assert!(
+    //         env::block_timestamp() < show.selling_end_time,
+    //         "This show has ended ticket sales"
+    //     );
+    //     assert!(
+    //         *show.ticket_sold_by_type.get(&ticket_type).unwrap() + amount
+    //             < *show.total_supply_ticket_by_type.get(&ticket_type).unwrap(),
+    //         "All tickets are sold out"
+    //     );
+    //     assert!(
+    //         env::attached_deposit()
+    //             == *show.ticket_price_by_type.get(&ticket_type).unwrap() + MINT_FEE,
+    //         "Please deposit exactly price of ticket"
+    //     );
+    // }
 
     #[payable]
     pub fn check_ticket(&mut self, ticket_id: String) {
@@ -248,6 +257,7 @@ impl Contract {
             self.tokens.owner_by_id.get(&ticket_id) == Some(env::predecessor_account_id()),
             "You do not own the ticket {}",
             self.tokens.owner_by_id.get(&ticket_id).unwrap()
+            
         );
         let mut ticket = self
             .tickets
@@ -276,18 +286,17 @@ impl Contract {
                 ticket_type,
                 is_used: false,
                 issued_at: env::block_timestamp(),
-                show: None,
             },
         );
         self.tokens.mint(
             token_id,
             receiver_id,
             Some(TokenMetadata {
-                title: Some("B-Event".to_string()), // ex. "Arch Nemesis: Mail Carrier" or "Parcel #5055"
-                description: Some("B-Event ticket".to_string()), // free-form description
-                media: Some("https://res.cloudinary.com/dcrbaasbt/image/upload/v1639640365/265266702_588262069101334_1825137514299467956_n_tiyp60.png".to_string()), // URL to associated media, preferably to decentralized, content-addressed storage
+                title: None,       // ex. "Arch Nemesis: Mail Carrier" or "Parcel #5055"
+                description: None, // free-form description
+                media: None, // URL to associated media, preferably to decentralized, content-addressed storage
                 media_hash: None, // Base64-encoded sha256 hash of content referenced by the `media` field. Required if `media` is included.
-                copies: Some(1), // number of copies of this set of metadata in existence when token was minted.
+                copies: None, // number of copies of this set of metadata in existence when token was minted.
                 issued_at: Some(env::block_timestamp().to_string()), // ISO 8601 datetime when token was issued or minted
                 expires_at: None,     // ISO 8601 datetime when token expires
                 starts_at: None,      // ISO 8601 datetime when token starts being valid
@@ -337,9 +346,7 @@ impl Contract {
     }
 
     pub fn ticket_metadata(&self, token_id: TokenId) -> TicketMetadata {
-        let mut _ticket = self.tickets.get(&token_id).unwrap();
-        _ticket.show = self.shows.get(&_ticket.show_id);
-        _ticket
+        self.tickets.get(&token_id).unwrap()
     }
 
     pub fn get_tickets_by_owner(&self, owner: AccountId) -> Vec<TicketMetadata> {
@@ -352,7 +359,7 @@ impl Contract {
             .unwrap_or_else(|| UnorderedSet::new(b"".to_vec()));
         token_ids
             .iter()
-            .map(|token_id: TokenId| self.ticket_metadata(token_id))
+            .map(|token_id| self.tickets.get(&token_id).unwrap())
             .collect()
     }
 }
@@ -384,8 +391,7 @@ pub struct TicketMetadata {
     pub show_id: String,     // required,
     pub ticket_type: String, // required,
     pub is_used: bool,       // required,
-    issued_at: Timestamp,
-    pub show: Option<ShowMetadata>, // required
+    issued_at: Timestamp,    // required
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -406,8 +412,6 @@ pub struct ShowMetadata {
     pub show_title: Option<String>,
     pub show_description: Option<String>,
     pub ticket_infos: HashMap<String, TicketInfo>,
-    pub show_time: Timestamp,
-    pub show_banner: Option<String>,
     // pub total_supply_ticket_by_type: HashMap<String, u64>, // required, type ticket => amount
     // pub ticket_sold_by_type: HashMap<String, u64>,         // required, type ticket => sold amount
     // pub ticket_price_by_type: HashMap<String, Balance>,    // required, type ticket =>
