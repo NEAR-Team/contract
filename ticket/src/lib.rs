@@ -98,7 +98,7 @@ impl Contract {
         self.owner_id = String::new();
     }
     // Add ticket info
-    pub fn add_ticket_info(&mut self, show_id: String,  info: TicketInfo){
+    pub fn add_ticket_info(&mut self, show_id: String, info: TicketInfo) {
         assert!(!self.shows.get(&show_id).is_none(), "This show not exist");
         assert!(
             env::predecessor_account_id() == self.owner_id,
@@ -107,12 +107,15 @@ impl Contract {
             self.owner_id
         );
         let mut show = self.shows.get(&show_id).unwrap();
-        assert!(show.ticket_infos.get(&info.ticket_type).is_none(), "This ticket info already exist");
+        assert!(
+            show.ticket_infos.get(&info.ticket_type).is_none(),
+            "This ticket info already exist"
+        );
         show.ticket_infos.insert(info.ticket_type.clone(), info);
         self.shows.insert(&show_id, &show);
-    }   
+    }
     // Add ticket info
-    pub fn edit_ticket_info(&mut self, show_id: String,  info: TicketInfo){
+    pub fn edit_ticket_info(&mut self, show_id: String, info: TicketInfo) {
         assert!(!self.shows.get(&show_id).is_none(), "This show not exist");
         assert!(
             env::predecessor_account_id() == self.owner_id,
@@ -121,10 +124,13 @@ impl Contract {
             self.owner_id
         );
         let mut show = self.shows.get(&show_id).unwrap();
-        assert!(!show.ticket_infos.get(&info.ticket_type).is_none(), "This ticket is not exist");
+        assert!(
+            !show.ticket_infos.get(&info.ticket_type).is_none(),
+            "This ticket is not exist"
+        );
         show.ticket_infos.insert(info.ticket_type.clone(), info);
         self.shows.insert(&show_id, &show);
-    }   
+    }
     /// Create new show
     pub fn create_new_show(
         &mut self,
@@ -133,7 +139,7 @@ impl Contract {
         show_description: Option<String>,
         ticket_types: Vec<String>,     // required, type ticket => amount
         tickets_supply: Vec<u32>,      // required
-        ticket_prices: Vec<U128>,       // required, type ticket =>
+        ticket_prices: Vec<U128>,      // required, type ticket =>
         selling_start_time: Timestamp, // required
         selling_end_time: Timestamp,
     ) {
@@ -156,7 +162,7 @@ impl Contract {
                 price: price + MINT_FEE,
                 sold: 0u32,
                 selling_start_time: Some(0u64),
-                selling_end_time: Some(0u64)
+                selling_end_time: Some(0u64),
             };
             ticket_infos.insert(ticket_types[i].clone(), ticket_info);
         }
@@ -179,11 +185,11 @@ impl Contract {
             env::block_timestamp() > show.selling_start_time,
             "This show has not started selling tickets yet {}",
             show.selling_start_time
-            
         );
         assert!(
             env::block_timestamp() < show.selling_end_time,
-            "This show has ended ticket sales {}", show.selling_end_time
+            "This show has ended ticket sales {}",
+            show.selling_end_time
         );
         assert!(
             show.ticket_infos.get(&ticket_type).unwrap().sold
@@ -195,7 +201,6 @@ impl Contract {
             "Please deposit exactly price of ticket {}. You deposit {}",
             show.ticket_infos.get(&ticket_type).unwrap().price,
             env::attached_deposit()
-            
         );
         let ticket_id = format!(
             "{}.{}.{}",
@@ -257,7 +262,6 @@ impl Contract {
             self.tokens.owner_by_id.get(&ticket_id) == Some(env::predecessor_account_id()),
             "You do not own the ticket {}",
             self.tokens.owner_by_id.get(&ticket_id).unwrap()
-            
         );
         let mut ticket = self
             .tickets
